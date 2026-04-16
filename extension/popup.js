@@ -1,36 +1,33 @@
+const mode = document.getElementById("mode");
+const timerBox = document.getElementById("timerContainer");
+
+mode.addEventListener("change", () => {
+  timerBox.style.display = mode.value === "timer" ? "block" : "none";
+});
+
 document.getElementById("start").onclick = () => {
-  const mode = document.getElementById("mode").value;
-  const level = document.getElementById("level").value;
-  const intent = document.getElementById("intent").value;
-  const time = document.getElementById("time").value;
+  const config = {
+    focusActive: true,
+    mode: mode.value,
+    level: document.getElementById("level").value,
+    intent: document.getElementById("intent").value,
+    endTime: null
+  };
 
-  let endTime = null;
-
-  if (mode === "timer" && time) {
-    endTime = Date.now() + time * 60 * 1000;
+  if (config.mode === "timer") {
+    const time = document.getElementById("time").value;
+    config.endTime = Date.now() + time * 60000;
   }
 
-  chrome.storage.sync.set({
-    focusActive: true,
-    mode,
-    level,
-    intent,
-    endTime
-  }, () => {
-    document.getElementById("status").innerText = "✅ Focus Started";
-    reloadTab();
-  });
+  chrome.storage.sync.set(config, reload);
 };
 
 document.getElementById("stop").onclick = () => {
-  chrome.storage.sync.set({ focusActive: false }, () => {
-    document.getElementById("status").innerText = "❌ Stopped";
-    reloadTab();
-  });
+  chrome.storage.sync.set({ focusActive: false }, reload);
 };
 
-function reloadTab() {
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+function reload() {
+  chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
     chrome.tabs.reload(tabs[0].id);
   });
 }

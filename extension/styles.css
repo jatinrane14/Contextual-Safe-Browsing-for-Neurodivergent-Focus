@@ -1,15 +1,41 @@
-.blur {
-  filter: blur(8px);
-  pointer-events: none;
+.fg-blur {
+  filter: blur(8px) !important;
+  pointer-events: none !important;
   position: relative;
 }
 
-.blur::after {
-  content: "Blocked";
+.fg-blur::after {
+  content: "Blocked by Focus Guard";
   position: absolute;
   top: 40%;
   left: 20%;
-  background: black;
+  background: rgba(0,0,0,0.8);
   color: white;
-  padding: 5px;
+  padding: 6px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.fg-control-panel {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: #0f1117;
+  color: white;
+  padding: 10px;
+  border-radius: 10px;
+  z-index: 999999;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.fg-btn {
+  background: white;
+  color: #1565C0;
+  border: none;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
 }

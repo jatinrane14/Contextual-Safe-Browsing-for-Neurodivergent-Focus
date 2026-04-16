@@ -1,5 +1,8 @@
 let processed = new WeakSet();
+let paused = false;
+let timerInterval;
 
+// INIT
 chrome.storage.sync.get(null, (config) => {
   if (!config.focusActive) return;
 
@@ -8,11 +11,16 @@ chrome.storage.sync.get(null, (config) => {
   startFiltering(config, intentWords);
 });
 
+// START
 function startFiltering(config, intentWords) {
   runFilter(config, intentWords);
 
+  let debounce;
   const observer = new MutationObserver(() => {
-    runFilter(config, intentWords);
+    clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      runFilter(config, intentWords);
+    }, 100);
   });
 
   observer.observe(document.body, {
@@ -20,52 +28,116 @@ function startFiltering(config, intentWords) {
     subtree: true
   });
 
+  createControlPanel(config);
+
   if (config.mode === "timer" && config.endTime) {
-    showTimer(config.endTime);
+    startTimer(config.endTime);
   }
 }
 
-// BASIC FILTER
-function basicFilter(el, intentWords) {
-  const text = el.innerText?.toLowerCase() || "";
+// GET ONLY TEXT CONTENT NODES (NOT WHOLE DOM)
+function getCandidateElements() {
+  return Array.from(document.querySelectorAll("*")).filter(el => {
+    return (
+      el.innerText &&
+      el.innerText.length > 30 &&
+      el.childElementCount === 0 && // leaf nodes only
+      el.offsetParent !== null && // visible
+      !el.closest("nav, header") // avoid navbar
+    );
+  });
+}
 
-  const bad = ["ad", "sponsored", "promo", "recommended"];
-
+// 🧠 RELEVANCE CHECK
+function isRelevant(text, intentWords) {
   let score = 0;
 
   intentWords.forEach(w => {
-    if (text.includes(w)) score++;
+    if (text.includes(w)) score += 2;
   });
 
-  bad.forEach(w => {
-    if (text.includes(w)) score--;
+  const distractors = ["meme", "funny", "viral", "shorts", "prank"];
+
+  distractors.forEach(w => {
+    if (text.includes(w)) score -= 2;
   });
 
-  if (score < 0) applyBlur(el);
+  return score > 0;
 }
 
-// ADVANCED FILTER (API)
-async function advancedFilter(elements) {
-  const data = elements.map(el => ({
-    text: el.innerText
-  }));
+// 🧠 BASIC FILTER
+function basicFilter(el, intentWords) {
+  const text = el.innerText.toLowerCase();
 
-  const res = await fetch("http://localhost:5000/analyze-dom", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ data })
-  });
+  if (!isRelevant(text, intentWords)) {
+    // 🔥 blur only parent content block
+    const container =
+      el.closest("ytd-rich-item-renderer") || // YouTube
+      el.closest("article") ||
+      el.closest("div");
 
-  const result = await res.json();
+    if (container && !processed.has(container)) {
+      processed.add(container);
+      applyBlur(container);
+    }
+  }
+}
 
-  result.blockIndexes.forEach(i => {
-    applyBlur(elements[i]);
+// 🤖 ADVANCED FILTER (AI)
+async function advancedFilter(elements, intent) {
+  try {
+    const limited = elements.slice(0, 20);
+
+    const data = limited.map(el => ({
+      text: el.innerText.slice(0, 200)
+    }));
+
+    const res = await fetch("http://127.0.0.1:3000/analyze-dom", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ data, intent })
+    });
+
+    const result = await res.json();
+    const blockIndexes = result.blockIndexes || [];
+
+    limited.forEach((el, i) => {
+      const container =
+        el.closest("ytd-rich-item-renderer") ||
+        el.closest("article") ||
+        el.closest("div");
+
+      if (!container) return;
+
+      if (blockIndexes.includes(i)) applyBlur(container);
+      else removeBlur(container);
+    });
+
+  } catch (err) {
+    console.error("AI Error:", err);
+    fallbackBasicFilter(elements);
+  }
+}
+
+// 🔁 FALLBACK
+function fallbackBasicFilter(elements) {
+  elements.forEach(el => {
+    const text = el.innerText.toLowerCase();
+
+    if (text.includes("ad") || text.includes("promo")) {
+      const container = el.closest("div");
+      if (container) applyBlur(container);
+    }
   });
 }
 
-// MAIN RUN
+// 🚀 MAIN
 function runFilter(config, intentWords) {
-  const elements = Array.from(document.querySelectorAll("div, article"));
+  if (paused) return;
+
+  const elements = getCandidateElements();
 
   if (config.level === "basic") {
     elements.forEach(el => {
@@ -75,42 +147,101 @@ function runFilter(config, intentWords) {
       }
     });
   } else {
-    advancedFilter(elements);
+    advancedFilter(elements, config.intent);
   }
 }
 
-// BLUR
+// 🌫️ BLUR
 function applyBlur(el) {
-  el.classList.add("blur");
-}
+  // Blur container
+  el.classList.add("fg-blur");
 
-// TIMER
-function showTimer(endTime) {
-  const box = document.createElement("div");
+  // 🔥 Blur all images inside
+  const images = el.querySelectorAll("img");
 
-  Object.assign(box.style, {
-    position: "fixed",
-    top: "20px",
-    right: "20px",
-    background: "#1565C0",
-    color: "white",
-    padding: "10px",
-    zIndex: "9999"
+  images.forEach(img => {
+    img.style.filter = "blur(8px)";
   });
 
-  document.body.appendChild(box);
+  // 🔥 Blur video thumbnails (extra safety)
+  const media = el.querySelectorAll("video, picture");
 
-  setInterval(() => {
+  media.forEach(m => {
+    m.style.filter = "blur(8px)";
+  });
+}
+// 🔓 REMOVE BLUR
+function removeBlur(el) {
+  el.classList.remove("fg-blur");
+
+  const images = el.querySelectorAll("img, video, picture");
+
+  images.forEach(media => {
+    media.style.filter = "none";
+  });
+}
+
+// 🎮 CONTROL PANEL (TOP RIGHT)
+function createControlPanel(config) {
+  const panel = document.createElement("div");
+  panel.className = "fg-control-panel";
+
+  const conText = document.createElement("p");
+  conText.innerText = "FocusForge";
+
+  const timerText = document.createElement("span");
+  timerText.innerText = "⏱ --:--";
+
+  const pauseBtn = document.createElement("button");
+  pauseBtn.className = "fg-btn";
+  pauseBtn.innerText = "⏸";
+
+  pauseBtn.onclick = () => {
+    paused = !paused;
+    pauseBtn.innerText = paused ? "▶" : "⏸";
+  };
+
+  const stopBtn = document.createElement("button");
+  stopBtn.className = "fg-btn";
+  stopBtn.innerText = "X";
+
+  stopBtn.onclick = () => {
+    chrome.storage.sync.set({ focusActive: false }, () => {
+      location.reload();
+    });
+  };
+
+  panel.appendChild(timerText);
+  panel.appendChild(pauseBtn);
+  panel.appendChild(stopBtn);
+
+  document.body.appendChild(panel);
+
+  panel.timerText = timerText;
+}
+
+// ⏱️ TIMER
+function startTimer(endTime) {
+  const panel = document.querySelector(".fg-control-panel");
+  const timerText = panel?.timerText;
+
+  timerInterval = setInterval(() => {
+    if (paused) return;
+
     const rem = endTime - Date.now();
 
     if (rem <= 0) {
-      box.innerText = "⏰ Done!";
+      clearInterval(timerInterval);
+      if (timerText) timerText.innerText = "⏰ Done!";
       return;
     }
 
     const m = Math.floor(rem / 60000);
     const s = Math.floor((rem % 60000) / 1000);
 
-    box.innerText = `⏱ ${m}:${s}`;
+    if (timerText) {
+      timerText.innerText = `⏱ ${m}:${s.toString().padStart(2, "0")}`;
+    }
+
   }, 1000);
 }

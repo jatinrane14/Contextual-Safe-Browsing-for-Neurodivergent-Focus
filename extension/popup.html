@@ -1,37 +1,39 @@
 <!DOCTYPE html>
 <html>
+<head>
+  <style>
+    body { font-family: Arial; width: 250px; padding: 10px; }
+    input, select, button { width: 100%; margin-top: 5px; }
+    #timerContainer { display: none; }
+  </style>
+</head>
 <body>
-  <h3>Focus Guard</h3>
 
-  <label>Mode:</label>
-  <select id="mode">
-    <option value="manual">Manual</option>
-    <option value="timer">Timer</option>
-  </select>
+<h3>Focus Guard</h3>
 
-  <br/><br/>
+<select id="mode">
+  <option value="manual">Manual</option>
+  <option value="timer">Timer</option>
+</select>
 
-  <label>Level:</label>
-  <select id="level">
-    <option value="basic">Basic</option>
-    <option value="advanced">Advanced</option>
-  </select>
+<select id="level">
+  <option value="">Select level of focus</option>
+  <option value="basic">Basic(Local Model)</option>
+  <option value="advanced">Advanced(AI - decisions)</option>
+</select>
 
-  <br/><br/>
+<input id="intent" placeholder="Goal (e.g Learn React)"/>
 
-  <input id="intent" placeholder="e.g Learn React"/>
-
-  <br/><br/>
-
+<div id="timerContainer">
   <input id="time" type="number" placeholder="Minutes"/>
+</div>
 
-  <br/><br/>
+<button id="start">Start</button>
+<button id="stop">Stop</button>
 
-  <button id="start">Start Focus</button>
-  <button id="stop">Stop</button>
+<p id="status"></p>
 
-  <p id="status"></p>
+<script src="popup.js"></script>
 
-  <script src="popup.js"></script>
 </body>
 </html>
