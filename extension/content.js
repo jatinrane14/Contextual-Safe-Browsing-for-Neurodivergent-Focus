@@ -14,13 +14,14 @@ chrome.storage.sync.get(null, (config) => {
 // START
 function startFiltering(config, intentWords) {
   runFilter(config, intentWords);
-
+  detectAndRemoveNavbar();
   let debounce;
   const observer = new MutationObserver(() => {
     clearTimeout(debounce);
     debounce = setTimeout(() => {
+      detectAndRemoveNavbar();
       runFilter(config, intentWords);
-    }, 100);
+    }, 30);
   });
 
   observer.observe(document.body, {
@@ -157,7 +158,7 @@ function applyBlur(el) {
   el.classList.add("fg-blur");
 
   // 🔥 Blur all images inside
-  const images = el.querySelectorAll("img");
+  const images = el.parentElement.parentElement.parentElement.querySelectorAll("img");
 
   images.forEach(img => {
     img.style.filter = "blur(8px)";
@@ -244,4 +245,30 @@ function startTimer(endTime) {
     }
 
   }, 1000);
+}
+function detectAndRemoveNavbar() {
+  const elements = document.querySelectorAll("body *");
+
+  elements.forEach(el => {
+    const rect = el.getBoundingClientRect();
+
+    // 🧠 Heuristics for navbar detection
+    const isTop = rect.top < 150; // near top
+    const isWide = rect.width > window.innerWidth * 0.7;
+    const hasManyLinks = el.querySelectorAll("a, button").length > 3;
+    const isHorizontal = rect.height < 120;
+
+    const style = window.getComputedStyle(el);
+    const isFixed =
+      style.position === "fixed" || style.position === "sticky";
+
+    if (isTop && isWide && hasManyLinks && isHorizontal && isFixed) {
+      hideNavbar(el);
+    }
+  });
+}
+function hideNavbar(el) {
+  el.style.display = "none";
+
+  console.log("🚫 Navbar removed:", el);
 }
